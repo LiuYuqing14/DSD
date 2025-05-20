@@ -1,6 +1,30 @@
 import torch
 from torch.distributions import Binomial, Multinomial
 
+def stratified_time_sampling(T: float, N: int, device: str = 'cuda') -> torch.Tensor:
+    """
+    Sample time steps using stratified sampling across the interval [0, T].
+
+    Parameters:
+    T (float): Maximum time in the diffusion process.
+    N (int): Number of time steps to sample.
+    device (str): Device on which to run the calculations (e.g., 'cuda' or 'cpu').
+
+    Returns:
+    torch.Tensor: Tensor of sampled times (shape: (N,))
+    """
+    # 确定观测时间序列（离散时间？）
+    # Create N uniform strata (subintervals) in the range [0, T]
+    # Stratified intervals will have width T/N
+    intervals = torch.linspace(0, T, N + 1, device=device)  # Dividing into N+1 points
+
+    # Sample uniformly within each interval
+    # We sample in the range [intervals[i], intervals[i+1]] for each interval i
+    # Create random values between 0 and 1, then scale them to fit in the intervals
+    stratified_samples = intervals[:-1] + (intervals[1:] - intervals[:-1]) * torch.rand(N, device=device)
+
+    return stratified_samples
+
 class DSDCorruptor:
     """Forward corruption process from Discrete Spatial Diffusion (Santos et al., 2025)."""
     def __init__(self, rate: float = 1.0, dt: float = 1.0,
@@ -68,5 +92,30 @@ class DSDCorruptor:
         x = img_int
         for _ in range(n_steps):
             x = self.step(x)
+        return x
+
+    def stratified_corrupt(self, img_int: torch.Tensor, T: float, N: int) -> torch.Tensor:
+        """
+        Corrupt the image using stratified time sampling.
+
+        Parameters:
+        img_int (torch.Tensor): Input image with particle counts (shape: (H, W, C)).
+        T (float): Maximum time for the corruption process.
+        N (int): Number of time steps to sample.
+
+        Returns:
+        torch.Tensor: The corrupted image after applying the diffusion process.
+        """
+        # Sample stratified times
+        stratified_times = stratified_time_sampling(T, N, device=self.device)
+
+        # Simulate diffusion at each sampled time step
+        x = img_int.clone()
+        for t in stratified_times:
+            # Here, `step()` would be a method of your corruption process
+            # that simulates diffusion over time (you should have this implemented already).
+            # Use the step method in 3.1
+            x = DSDCorruptor.step(x)  # Apply the diffusion step for each time point
+
         return x
 
